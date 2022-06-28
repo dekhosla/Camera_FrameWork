@@ -58,13 +58,13 @@ ports = [
     if 'USB' in p.description
 ]
 
-if not ports:
-    raise IOError("There is no device exist on serial port!")
 
-if len(ports) > 1:
-    warnings.warn('Connected....')
 
-ser = serial.Serial(ports[0],9600)
+if len(ports) > 0:
+    ser = serial.Serial(ports[0],115200)  
+    # warnings.warn('Connected....')
+
+
 #Port Detection END
 
 # MULTI-THREADING
@@ -78,7 +78,7 @@ class Worker(QObject):
         super(Worker, self).__init__()
         self.working = True
 
-    def work(self):
+    def work(self):        
         while self.working:
             line = ser.readline().decode('utf-8')
             #print(line)
@@ -93,22 +93,42 @@ class qt(QMainWindow):
 
         QMainWindow.__init__(self)
         loadUi('QT_Camera_UI.ui', self)
-
+        self.ser=ser
         self.thread = None
         self.worker = None
-        self.pushButton.clicked.connect(self.start_loop)
-        self.Clear_Output.clicked.connect(self.ClearOutput)
-        self.label_11.setText(ports[0])
+        # self.pushButton.clicked.connect(self.start_loop)
+        self.Clear_Output.clicked.connect(self.ClearOutput)       
         self.UiComponents()  #setting DropDown
-        self.menuBar=self.menuBar()
-        # fileMenu=self.menuBar.addMenu("file")
+        self.menuBar=self.menuBar()      
 
     def UiComponents(self):
-        channel_list = ports
+       
+        channel_list =ports
         self.comboBoxDropDown.addItems(channel_list)   
+        baudSelection = map(str, ser.BAUDRATES) 
+        self.comboBoxDropDown_2.addItems(baudSelection)        
+        self.comboBoxDropDown_2.setCurrentIndex(len(ser.BAUDRATES)-1) 
+        self.comboBoxDropDown_2.activated.connect(self.activated)
+        self.comboBoxDropDown_2.currentTextChanged.connect(self.text_changed)
+        self.comboBoxDropDown_2.currentIndexChanged.connect(self.index_changed)
+     
+        self.start_loop()
+      
+    def activated(self, index):           
+        print("Activated index:", index)
 
-    def loop_finished(self):
-        print('Loop Finished')
+    def text_changed(self, s):              
+        ser = serial.Serial(ports[0],s) 
+        print("Text changed:", s)
+
+    def index_changed(self, index):
+        self.worker.working = False
+        self.ser.reset_input_buffer()
+        self.ser.reset_output_buffer()
+        self.ser.flushInput()
+        self.ser.flushOutput()
+        self.ser.close()
+        print("Index changed", index)
 
     def start_loop(self):
 
@@ -122,28 +142,25 @@ class qt(QMainWindow):
 
         # self.pushButton_2.clicked.connect(self.stop_loop)      # stop the loop on the stop button click
 
-        self.worker.finished.connect(self.loop_finished)       # do something in the gui when the worker loop ends
+        # self.worker.finished.connect(self.loop_finished)       # do something in the gui when the worker loop ends
         self.worker.finished.connect(self.thread.quit)         # tell the thread it's time to stop running
         self.worker.finished.connect(self.worker.deleteLater)  # have worker mark itself for deletion
         self.thread.finished.connect(self.thread.deleteLater)  # have thread mark itself for deletion
 
+        self.label_5.setText("CONNECTED!")
+        self.label_5.setStyleSheet('color: green')
+        x = 1
+        self.textBrowser_3.setText(":")
         self.thread.start()
 
-    # def stop_loop(self):
-    #     self.worker.working = False
+ 
 
     def onIntReady(self, i):
         # self.textEdit_3.append("{}".format(i))
         self.textBrowser_3.append("{}".format(i))      
         # print(i)
 
-    # Save the settings
-    def on_pushButton_4_clicked(self):
-        if self.x != 0:
-            self.textEdit.setText('Settings Saved!')
-        else:
-            self.textEdit.setText('Please enter port and speed!')
-
+  
     def ClearOutput(self):
         self.textBrowser_3.clear()
 
@@ -157,75 +174,14 @@ class qt(QMainWindow):
     def on_pushButton_2_clicked(self):
         self.textEdit.setText('Stopped! Please click CONNECT...')
 
-    def on_pushButton_clicked(self):
-     
-        self.label_5.setText("CONNECTED!")
-        self.label_5.setStyleSheet('color: green')
-        x = 1
-        self.textBrowser_3.setText(":")
+
 
     def on_pushButton_3_clicked(self):
         # Send data from serial port:
         mytext = self.textEdit_2.toPlainText()
         # print(mytext.encode())
         ser.write(mytext.encode())
-
-    def on_pushButton_24_clicked(self):
-        self.thread = QThread() 
-        self.camera = camera()
-        self.camera.start()
-        self.camera.ImageUpdate.connect(self.ImageUpdateSlot)
-
-    def ImageUpdateSlot(self, Image):
-        self.label_49.setPixmap(QPixmap.fromImage(Image))
-
-    def on_pushButton_23_clicked(self):
-        measured_dps = 0.0          # displayed frames per second
-        num_frames = 0              # frame counter
-        dps_measure_time = 5.0      # count frames for 5 sec
-        last_time = time.perf_counter()
-        last_display = time.perf_counter()
-        test='true'
-        while (test):
-            current_time = time.perf_counter()
-
-            # update displayed frames per second
-            if (current_time - last_time) >= dps_measure_time:
-                measured_dps = num_frames/dps_measure_time
-                logger.log(logging.DEBUG, "Status:Frames displayed per second:{}".format(measured_dps))
-                last_time = current_time
-                num_frames = 0
-
-            # display frame
-            if (current_time - last_display) > display_interval:
-                frame = test_img.copy()
-                cv2.putText(frame,"Frame:{}".format(num_frames),             textLocation0, font, fontScale, fontColor, lineType)
-                cv2.putText(frame,"Frame Rate:{} [Hz]".format(measured_dps), textLocation1, font, fontScale, fontColor, lineType)
-               
-                num_frames += 1
-                last_display = current_time
-                key = cv2.waitKey(1)
-                # Image=cv2
-
-                Image1 = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                pil_im=Image.fromarray(Image1)
-                draw=ImageDraw.Draw(pil_im)
-                # font1=ImageFont.truetype("Roboto-Regular.ttf",50)
-                draw.text((0,0),"Frame")
-
-                
-                Image2 = cv2.cvtColor(np.array(pil_im), cv2.COLOR_BGR2RGB)
-
-                FlippedImage = cv2.flip(Image2, 1)
-                ConvertToQtFormat = QtGui.QImage(FlippedImage.data, FlippedImage.shape[1], FlippedImage.shape[0], QImage.Format_RGB888)
-                # img = ConvertToQtFormat.scaled(700, 421, Qt.KeepAspectRatio)                
-                self.label_49.setPixmap(QPixmap.fromImage(ConvertToQtFormat))
-
-
-                if (key == 27) or (key & 0xFF == ord('q')):
-                    break
-
-        
+  
     
     
 #
