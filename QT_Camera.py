@@ -1,6 +1,8 @@
 __author__ = 'Devesh Khosla - github.com/dekhosla'
 
-import sys, serial, serial.tools.list_ports, warnings
+from re import UNICODE
+import sys, serial, serial.tools.list_ports, warnings, io
+import unicodedata
 from PyQt5.QtCore import QSize, QRect, QObject, pyqtSignal, QThread, pyqtSignal, pyqtSlot
 import time
 from PyQt5.QtWidgets import QApplication, QComboBox, QDialog, QMainWindow, QWidget, QLabel, QTextEdit, QListWidget, \
@@ -13,6 +15,7 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtCore import * 
 from PyQt5.QtGui import *
 
+
 import logging
 import time
 import numpy as np
@@ -21,6 +24,8 @@ from PyQt5.QtGui import *
 from PyQt5 import QtGui
 from PyQt5.QtGui import QPixmap
 from PIL import ImageFont,ImageDraw,Image
+import serial
+import io
 
 # Define Variable
 width = 511       # 1920, 720
@@ -62,6 +67,8 @@ ports = [
 
 if len(ports) > 0:
     ser = serial.Serial(ports[0],115200)  
+    sio = io.TextIOWrapper(io.BufferedRWPair(ser, ser))
+    
     # warnings.warn('Connected....')
 
 
@@ -80,9 +87,10 @@ class Worker(QObject):
 
     def work(self):        
         while self.working:
-            line = ser.readline().decode('utf-8')
+            sio.flush()
+            line = sio.readline().decode('utf-8')
             #print(line)
-            time.sleep(0.00005)
+            # time.sleep(0.00005)
             self.intReady.emit(line)
 
         self.finished.emit()
@@ -97,7 +105,8 @@ class qt(QMainWindow):
         self.thread = None
         self.worker = None
         # self.pushButton.clicked.connect(self.start_loop)
-        self.Clear_Output.clicked.connect(self.ClearOutput)       
+        self.Clear_Output.clicked.connect(self.ClearOutput) 
+        self.textEdit_2.selectionChanged.connect(self.on_textEdit_2_returnPressed)      
         self.UiComponents()  #setting DropDown
         self.menuBar=self.menuBar()      
 
@@ -118,7 +127,8 @@ class qt(QMainWindow):
         print("Activated index:", index)
 
     def text_changed(self, s):              
-        ser = serial.Serial(ports[0],s) 
+        ser = serial.Serial(ports[0],s)
+        sio = io.TextIOWrapper(io.BufferedRWPair(ser, ser)) 
         print("Text changed:", s)
 
     def index_changed(self, index):
@@ -130,6 +140,9 @@ class qt(QMainWindow):
         self.ser.close()
         print("Index changed", index)
 
+    def on_textEdit_2_returnPressed(self):
+            # self.textEdit_2.setText(self.textEdit_2.text())
+            self.on_pushButton_3_clicked()
     def start_loop(self):
 
         self.worker = Worker()   # a new worker to perform those tasks
@@ -179,8 +192,13 @@ class qt(QMainWindow):
     def on_pushButton_3_clicked(self):
         # Send data from serial port:
         mytext = self.textEdit_2.toPlainText()
+        # sio = io.TextIOWrapper(io.BufferedRWPair(self.ser, self.ser))
         # print(mytext.encode())
-        ser.write(mytext.encode())
+        # ser.write(mytext.encode())     
+        mytext="i"  
+        sio.write(np.unicode_("i"))
+        # sio.write(unicode(mytext))
+        # sio.flush()
   
     
     
